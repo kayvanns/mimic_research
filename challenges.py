@@ -23,17 +23,25 @@ icu["intime"] = pd.to_datetime(icu["intime"])
 icu["outtime"] = pd.to_datetime(icu["outtime"]) 
 
 
-admissions["year"] = admissions["admittime"].dt.year
-admissions_per_year = admissions.groupby("year")["hadm_id"].nunique()
+
+adm = admissions.merge(
+    patients[["subject_id", "anchor_year_group"]],
+    on="subject_id",
+    how="left"
+)
+
+adm_per_group = adm.groupby("anchor_year_group")["hadm_id"].nunique()
+mort_per_group = adm.groupby("anchor_year_group")["hospital_expire_flag"].mean()
 
 overall_mortality_rate= ((admissions["hospital_expire_flag"] == 1).astype(int)).mean()
 icu_mortality = admissions[admissions["hadm_id"].isin(icu["hadm_id"])]["hospital_expire_flag"].mean()
-mortality_per_year = admissions.groupby("year")["hospital_expire_flag"].mean()
+
 
 icu["icu_los"] = (icu["outtime"] - icu["intime"]).dt.total_seconds() / (24*3600)
-icu_los_per_hadm = icu.groupby("hadm_id")["icu_los"].sum()
+icu_los_per_hadm = icu.groupby("hadm_id")["icu_los"].sum().to_frame()
+icu_los_per_hadm["bucket"] = pd.cut(icu_los_per_hadm["icu_los"], bins=[0,1,3,7,14,30,10000],labels=["0–1", "1–3", "3–7", "7–14", "14–30", "30+"], right=False)
 admissions["hosp_length"] = (admissions["dischtime"]-admissions["admittime"]).dt.total_seconds() / (24*3600)
-
+adm_length = pd.cut(admissions["hosp_length"], bins=[0,1,3,7,14,30,60,120,10000],labels=["0–1", "1–3", "3–7", "7–14", "14–30", "30+", "60–120", "120+"], right=False)
 p_diagnoses = diagnoses[diagnoses["seq_num"]==1]
 p_diagnoses = p_diagnoses.merge(d_diagnoses, on="icd_code", how="left")
 top_primary = (p_diagnoses["long_title"].value_counts().head(10))
@@ -47,21 +55,22 @@ print("ICU Mortality:", icu_mortality)
 print("Top Primary Diagnoses:\n", top_primary)
 
 fig,(ax1,ax2,ax3,ax4)=plt.subplots(ncols=4,figsize=(24,5))
-admissions_per_year.plot(ax=ax1)
+adm_per_group.plot(ax=ax1)
 ax1.set_title("Number of Admissions per Year")
 ax1.set_xlabel("Year")
 ax1.set_ylabel("Number of Admissions")
-mortality_per_year.plot(ax=ax2)
+mort_per_group.plot(ax=ax2)
 ax2.set_title("Hospital Mortality Rate per Year")
 ax2.set_xlabel("Year")
 ax2.set_ylabel("Mortality Rate")
-icu_los_per_hadm.plot.hist( bins=50, ax=ax3)
+icu_los_per_hadm["bucket"].value_counts().sort_index().plot.bar(ax=ax3)
 ax3.set_title("ICU Length of Stay per Hospitalization")
 ax3.set_xlabel("ICU Length of Stay (days)")
 ax3.set_ylabel("Frequency")
-admissions["hosp_length"].plot.hist(bins=50,ax=ax4)
+adm_length.value_counts().sort_index().plot.bar(ax=ax4)
 ax4.set_title("Hospital Length of Stay")
 ax4.set_xlabel("Hospital Length of Stay (days)")
 ax4.set_ylabel("Frequency") 
 plt.tight_layout()
 fig.savefig("graphs/mimic_challenges.png")
+print(adm_length)
