@@ -1,5 +1,5 @@
 import pandas as pd
-import cleaning
+import scripts.cleaning as cleaning
 
 USECOLS = {
     "patients": ["subject_id", "gender", "anchor_age", "anchor_year", "anchor_year_group"],

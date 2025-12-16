@@ -31,23 +31,7 @@ icd_codes_kidney = ["N17","584"]
 
 procedure_keywords = ["ventilation", "endotracheal", "intubation", "mechanical ventilation"]
 
-def clean(title, before, after):
-    matched_titles = d_diagnoses[d_diagnoses["long_title"].str.contains(title, case=False,na=False)].copy()
-    diagnoses_filtered = diagnoses[diagnoses["icd_code"].isin(matched_titles["icd_code"])].copy()
-    patients_info = patients[patients["subject_id"].isin(diagnoses_filtered["subject_id"])].copy().reset_index(drop=True)
-    admissions_info = admissions[admissions["hadm_id"].isin(diagnoses_filtered["hadm_id"])].copy().reset_index(drop=True)
-    df = patients_info.merge(admissions_info,on="subject_id")
-    col = "hadm_id"
-    df = df[[col] + [c for c in df.columns if c != col]]
-    df = df.merge(icustays,on=["hadm_id","subject_id"],how="left")
-    df["outtime"]= pd.to_datetime(df["outtime"])
-    df["intime"]=pd.to_datetime(df["intime"])
-    df["ICU_length"] = (df["outtime"] - df["intime"]).dt.total_seconds() / 3600
-    df["admittime"] =pd.to_datetime(df["admittime"])
-    df["dischtime"] = pd.to_datetime(df["dischtime"])
-    df["Hospital_length"] = (df["dischtime"]-df["admittime"]).dt.total_seconds() / 3600
-    df = df[columns]
-    return get_vitals(df,before,after)
+
     
 def get_vitals(df, before, after,chartevents,labs):
     df = df.copy()
@@ -91,8 +75,8 @@ def get_medications(df,pharmacy):
 
     df = df.merge(ab_flag, on="hadm_id", how="left")
     df = df.merge(vaso_flag, on="hadm_id", how="left")
-    df["antibiotics_given"] = df["antibiotics_given"].fillna(False)
-    df["vaso_given"] = df["vaso_given"].fillna(False)
+    df["antibiotics_given"] = df["antibiotics_given"].fillna(False).astype(int)
+    df["vaso_given"] = df["vaso_given"].fillna(False).astype(int)
     return df
     
 def get_max_creatinine_bun(df,labs):
@@ -104,10 +88,10 @@ def get_max_creatinine_bun(df,labs):
     df = df.merge(max_bun, on="hadm_id", how="left")
     return df
 
-def get_time_to_first_antibiotic(df):
+def get_time_to_first_antibiotic(df,pharmacy):
     df = df.copy()
     p = pharmacy.copy()
-    p["starttime"] = pd.to_datetime(p["starttime"])
+    p["starttime"] = pd.to_datetime(p["starttime"],errors="coerce")
     merged = p.merge(df[["hadm_id","admittime"]],on="hadm_id", how="right")
     antibiotics_df = merged[merged["medication"].isin(antibiotics)]
     mask = antibiotics_df["starttime"] >= antibiotics_df["admittime"]
